@@ -177,10 +177,18 @@ function BankPicker({ banks, onSelect }: {
   const options = useMemo(() => {
     const out: { label: string; rate: number; type: RateType }[] = [];
     banks.forEach(b => {
-      if (b.variableRate) out.push({ label: `${b.name}｜変動 ${b.variableRate}%`, rate: b.variableRate, type: 'variable' });
-      if (b.fixedRate10) out.push({ label: `${b.name}｜固定10年 ${b.fixedRate10}%`, rate: b.fixedRate10, type: 'fixed' });
+      const type: RateType = b.productType === 'variable' ? 'variable' : 'fixed';
+      const typeLabel = b.productType === 'variable' ? '変動' : '固定';
+      out.push({ label: `${b.name}｜${typeLabel} ${b.rate}%`, rate: b.rate, type });
     });
-    return out.sort((a, b) => a.rate - b.rate).slice(0, 16);
+    // dedupe by rate+type, sort ascending, cap at 16
+    const seen = new Set<string>();
+    return out.filter(o => {
+      const k = `${o.rate}-${o.type}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).sort((a, b) => a.rate - b.rate).slice(0, 16);
   }, [banks]);
 
   if (options.length === 0) return null;
