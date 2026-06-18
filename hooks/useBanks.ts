@@ -1,41 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { loadBanks, saveBanks } from '@/lib/bankStorage';
-import type { BankMaster } from '@/types';
+import { useLocalStorageCollection } from "@/hooks/useLocalStorageCollection";
+import { BANKS } from "@/lib/banks";
+import type { BankMaster } from "@/types";
 
 export function useBanks() {
-  const [banks, setBanks] = useState<BankMaster[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const { items: banks, loaded, add, update, remove } =
+    useLocalStorageCollection<BankMaster>("loan_navi_banks_v4", BANKS);
 
-  useEffect(() => {
-    setBanks(loadBanks());
-    setLoaded(true);
-  }, []);
-
-  const addBank = useCallback((bank: BankMaster) => {
-    setBanks(prev => {
-      const next = [...prev, bank];
-      saveBanks(next);
-      return next;
-    });
-  }, []);
-
-  const updateBank = useCallback((id: string, data: BankMaster) => {
-    setBanks(prev => {
-      const next = prev.map(b => b.id === id ? data : b);
-      saveBanks(next);
-      return next;
-    });
-  }, []);
-
-  const deleteBank = useCallback((id: string) => {
-    setBanks(prev => {
-      const next = prev.filter(b => b.id !== id);
-      saveBanks(next);
-      return next;
-    });
-  }, []);
+  const addBank    = (bank: BankMaster)                => add({ ...bank } as Omit<BankMaster, "id">);
+  const updateBank = (id: string, data: BankMaster)    => update(id, data);
+  const deleteBank = (id: string)                      => remove(id);
 
   return { banks, loaded, addBank, updateBank, deleteBank };
 }

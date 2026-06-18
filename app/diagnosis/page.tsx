@@ -432,7 +432,7 @@ export default function DiagnosisPage() {
             <div className="relative">
               <input type="text" value={form.constructionAddress}
                 onChange={e => setForm(f => ({ ...f, constructionAddress: e.target.value }))}
-                placeholder="例：大阪府松原市〇〇町1-2-3"
+                placeholder="例：大阪府○○市〇〇町1-2-3"
                 className="w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-all"
                 style={{ background: '#F9FAFB', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
                 onFocus={e => { e.currentTarget.style.borderColor = '#3b82f6'; }}

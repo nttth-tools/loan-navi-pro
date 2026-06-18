@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── ヘルパー関数 ────────────────────────────────────────────────────────
+
+    // ログイン済みか
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // users/{uid}.companyId を取得（キャッシュされるので get() は1回のみ）
+    function userCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+
+    // リクエストユーザーが対象 companyId に所属しているか
+    function belongsToCompany(companyId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userCompanyId() == companyId;
+    }
+
+    // ── users コレクション ──────────────────────────────────────────────────
+    // 自分自身の user ドキュメントのみ読み書き可
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ── companies コレクション ─────────────────────────────────────────────
+    // companies/{companyId} ドキュメント本体（会社メタ情報）
+    match /companies/{companyId} {
+      allow read, write: if belongsToCompany(companyId);
+
+      // customers, banks, areaMasters, screenings, tasks, settings
+      match /customers/{docId} {
+        allow read, write: if belongsToCompany(companyId);
+      }
+
+      match /banks/{docId} {
+        allow read, write: if belongsToCompany(companyId);
+      }
+
+      match /areaMasters/{docId} {
+        allow read, write: if belongsToCompany(companyId);
+      }
+
+      match /screenings/{docId} {
+        allow read, write: if belongsToCompany(companyId);
+      }
+
+      match /tasks/{docId} {
+        allow read, write: if belongsToCompany(companyId);
+      }
+
+      match /settings/{docId} {
+        allow read, write: if belongsToCompany(companyId);
+      }
+    }
+
+    // 上記に含まれないパスはすべて拒否（デフォルト）
+  }
+}

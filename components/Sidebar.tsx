@@ -5,21 +5,25 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Building2, TrendingUp, Calculator,
-  ClipboardList, FileText, Bell, Settings, ChevronDown, HelpCircle, Menu, X, MapPin, BarChart2,
+  ClipboardList, FileText, Bell, Settings, ChevronDown, HelpCircle, X, MapPin, BarChart2,
+  CalendarClock,
 } from "lucide-react";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { useLoanSchedules } from "@/hooks/useLoanSchedules";
 
 const navItems = [
-  { href: "/dashboard",    icon: LayoutDashboard, label: "ダッシュボード" },
-  { href: "/customers",    icon: Users,            label: "顧客管理" },
-  { href: "/banks",        icon: Building2,        label: "銀行マスタ" },
-  { href: "/area-master",  icon: MapPin,           label: "融資エリアマスタ" },
-  { href: "/rates",        icon: TrendingUp,       label: "金利ランキング" },
-  { href: "/diagnosis",    icon: Calculator,       label: "ローン診断" },
-  { href: "/simulator",    icon: BarChart2,        label: "借入シミュレーター" },
-  { href: "/screening",    icon: ClipboardList,    label: "事前審査管理" },
-  { href: "/proposals",    icon: FileText,         label: "比較提案書" },
-  { href: "/tasks",        icon: Bell,             label: "タスク・アラート", badge: 3 },
-  { href: "/settings",     icon: Settings,         label: "設定" },
+  { href: "/dashboard",     icon: LayoutDashboard, label: "ダッシュボード" },
+  { href: "/customers",     icon: Users,           label: "顧客管理" },
+  { href: "/loan-schedule", icon: CalendarClock,   label: "ローンスケジュール" },
+  { href: "/banks",         icon: Building2,       label: "銀行マスタ" },
+  { href: "/area-master",   icon: MapPin,          label: "融資エリアマスタ" },
+  { href: "/rates",         icon: TrendingUp,      label: "金利ランキング" },
+  { href: "/diagnosis",     icon: Calculator,      label: "ローン診断" },
+  { href: "/simulator",     icon: BarChart2,       label: "借入シミュレーター" },
+  { href: "/screening",     icon: ClipboardList,   label: "事前審査管理" },
+  { href: "/proposals",     icon: FileText,        label: "比較提案書" },
+  { href: "/tasks",         icon: Bell,            label: "タスク・アラート" },
+  { href: "/settings",      icon: Settings,        label: "設定" },
 ];
 
 // ── LN House Logo ─────────────────────────────────────────────────────────────
@@ -65,6 +69,9 @@ const BORDER = "#1E293B";
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { profile } = useUserProfile();
+  const { getAlerts } = useLoanSchedules();
+  const urgentAlertCount = getAlerts().filter(a => a.daysUntil <= 7).length;
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
@@ -127,10 +134,10 @@ export default function Sidebar() {
                 >
                   <item.icon size={16} strokeWidth={active ? 2.5 : 2} />
                   <span>{item.label}</span>
-                  {item.badge && (
+                  {item.href === "/loan-schedule" && urgentAlertCount > 0 && (
                     <span className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full"
                       style={{ background: "#EF4444", color: "#fff", fontSize: "10px" }}>
-                      {item.badge}
+                      {urgentAlertCount}
                     </span>
                   )}
                 </Link>
@@ -160,11 +167,11 @@ export default function Sidebar() {
           onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
             style={{ background: "linear-gradient(135deg, #1E40AF, #1D4ED8)", color: "#fff" }}>
-            山
+            {profile.name[0]}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate text-white">山田 太郎</div>
-            <div className="text-xs truncate" style={{ color: "#94A3B8" }}>営業担当</div>
+            <div className="text-sm font-semibold truncate text-white">{profile.name}</div>
+            <div className="text-xs truncate" style={{ color: "#94A3B8" }}>{profile.role}</div>
           </div>
           <ChevronDown size={14} style={{ color: "#64748B" }} />
         </div>

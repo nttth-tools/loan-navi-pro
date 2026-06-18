@@ -232,18 +232,11 @@ function ActionButtons({ onDiagnosis, onProposal }: { onDiagnosis: () => void; o
         ローン診断へ進む
         <ArrowRight size={13} />
       </button>
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={onProposal}
-          className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
-          style={{ background: C.card, color: C.sub, border: `1px solid ${C.border}` }}>
-          <FileText size={13} />比較提案書
-        </button>
-        <button
-          className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
-          style={{ background: C.card, color: C.sub, border: `1px solid ${C.border}` }}>
-          <Users size={13} />顧客情報に保存
-        </button>
-      </div>
+      <button onClick={onProposal}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+        style={{ background: C.card, color: C.sub, border: `1px solid ${C.border}` }}>
+        <FileText size={13} />比較提案書を作成
+      </button>
     </div>
   );
 }

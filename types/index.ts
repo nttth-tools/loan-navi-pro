@@ -213,6 +213,108 @@ export interface ScreeningRecord {
   preScreeningDays?: string;  // 目安日数（表示用）
 }
 
+// ─── ローンスケジュール ────────────────────────────────────────────────────
+
+export type LoanDateKey =
+  | 'landContractDate'        // 土地契約日
+  | 'buildingContractDate'    // 建物請負契約日
+  | 'preLoanApplicationDate'  // 事前審査申込日
+  | 'preLoanApprovalDate'     // 事前審査承認日
+  | 'mainApplicationDate'     // 本申込日
+  | 'mainApprovalDate'        // 本申込承認日
+  | 'landSettlementDate'      // 土地決済日
+  | 'constructionStartDate'   // 着工予定日
+  | 'constructionPaymentDate' // 着工金支払日
+  | 'interimPaymentDate'      // 中間金支払日
+  | 'raisedFrameDate'         // 上棟予定日
+  | 'loanContractDate'        // 金消契約予定日
+  | 'loanExecutionDate'       // 融資実行日
+  | 'deliveryDate';           // 引渡し予定日
+
+export const LOAN_DATE_LABELS: Record<LoanDateKey, string> = {
+  landContractDate:        '土地契約日',
+  buildingContractDate:    '建物請負契約日',
+  preLoanApplicationDate:  '事前審査申込日',
+  preLoanApprovalDate:     '事前審査承認日',
+  mainApplicationDate:     '本申込日',
+  mainApprovalDate:        '本申込承認日',
+  landSettlementDate:      '土地決済日',
+  constructionStartDate:   '着工予定日',
+  constructionPaymentDate: '着工金支払日',
+  interimPaymentDate:      '中間金支払日',
+  raisedFrameDate:         '上棟予定日',
+  loanContractDate:        '金消契約予定日',
+  loanExecutionDate:       '融資実行日',
+  deliveryDate:            '引渡し予定日',
+};
+
+export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'on_hold';
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  pending:     '未対応',
+  in_progress: '対応中',
+  done:        '完了',
+  on_hold:     '保留',
+};
+
+export const TASK_STATUS_STYLES: Record<TaskStatus, { bg: string; color: string }> = {
+  pending:     { bg: '#F1F5F9', color: '#64748B' },
+  in_progress: { bg: '#DBEAFE', color: '#1D4ED8' },
+  done:        { bg: '#DCFCE7', color: '#15803D' },
+  on_hold:     { bg: '#FEF3C7', color: '#B45309' },
+};
+
+export interface LoanTask {
+  id: string;
+  name: string;
+  baseDateKey: LoanDateKey;
+  offsetDays: number;       // 負 = 前、正 = 後
+  dueDate?: string;         // 自動計算または手動設定
+  assignee?: string;
+  status: TaskStatus;
+  requiredDocuments: string[];
+  bankSubmitTo?: string;
+  bankContact?: string;
+  notes?: string;
+}
+
+export interface LoanSchedule {
+  id: string;
+  customerId: string;
+  bankId?: string;
+  bankName?: string;
+  dates: Partial<Record<LoanDateKey, string>>;
+  payments: {
+    landSettlement?: number;
+    constructionFee?: number;
+    interimFee?: number;
+    finalFee?: number;
+    bridgeLoan?: boolean;
+    splitExecution?: boolean;
+  };
+  tasks: LoanTask[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TemplateTask {
+  id: string;
+  name: string;
+  baseDateKey: LoanDateKey;
+  offsetDays: number;
+  requiredDocuments: string[];
+  notes?: string;
+}
+
+export interface LoanScheduleTemplate {
+  id: string;
+  bankId?: string;
+  name: string;
+  tasks: TemplateTask[];
+}
+
+// ─── 顧客 ─────────────────────────────────────────────────────────────────────
+
 export interface Customer {
   id: string;
   name: string;

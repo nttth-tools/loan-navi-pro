@@ -1,18 +1,9 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Bell, CheckSquare, Square, Plus, X, AlertTriangle, Clock, RefreshCw, CheckCircle } from "lucide-react";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
-
-interface Task {
-  id: string;
-  text: string;
-  tag: string;
-  tagColor: string;
-  tagBg: string;
-  date: string;
-  done: boolean;
-}
+import { useTasks } from "@/hooks/useTasks";
+import type { Task } from "@/hooks/useTasks";
 
 const TAG_OPTIONS = [
   { label: '事前審査', color: '#3b82f6', bg: '#DBEAFE' },
@@ -22,50 +13,52 @@ const TAG_OPTIONS = [
   { label: 'フォロー', color: '#06b6d4', bg: '#CFFAFE' },
 ];
 
+function relDate(n: number): string {
+  const d = new Date(); d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function relDateSlash(n: number): string {
+  const d = new Date(); d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
 const SAMPLE_TASKS: Task[] = [
-  { id:'1', text:'山田 様 書類提出フォロー', tag:'事前審査', tagColor:'#3b82f6', tagBg:'#DBEAFE', date:'2024-07-10', done:false },
-  { id:'2', text:'佐藤 様 銀行比較提案書作成', tag:'提案', tagColor:'#f59e0b', tagBg:'#FEF3C7', date:'2024-07-11', done:false },
-  { id:'3', text:'鈴木 様 追加資料依頼', tag:'事前審査', tagColor:'#3b82f6', tagBg:'#DBEAFE', date:'2024-07-12', done:false },
-  { id:'4', text:'田中 様 本審査進捗確認', tag:'本審査', tagColor:'#8b5cf6', tagBg:'#EDE9FE', date:'2024-07-12', done:false },
-  { id:'5', text:'高橋 様 面談', tag:'提案', tagColor:'#f59e0b', tagBg:'#FEF3C7', date:'2024-07-13', done:false },
+  { id:'1', text:'山田 様 書類提出フォロー', tag:'事前審査', tagColor:'#3b82f6', tagBg:'#DBEAFE', date:relDate(0), done:false },
+  { id:'2', text:'佐藤 様 銀行比較提案書作成', tag:'提案', tagColor:'#f59e0b', tagBg:'#FEF3C7', date:relDate(1), done:false },
+  { id:'3', text:'鈴木 様 追加資料依頼', tag:'事前審査', tagColor:'#3b82f6', tagBg:'#DBEAFE', date:relDate(2), done:false },
+  { id:'4', text:'田中 様 本審査進捗確認', tag:'本審査', tagColor:'#8b5cf6', tagBg:'#EDE9FE', date:relDate(2), done:false },
+  { id:'5', text:'高橋 様 面談', tag:'提案', tagColor:'#f59e0b', tagBg:'#FEF3C7', date:relDate(3), done:false },
 ];
 
 const ALERTS = [
-  { type:'error', icon:AlertTriangle, title:'最終確認日が30日以上前の銀行があります', sub:'7件の銀行が対象です', date:'2024/07/10', color:'#ef4444', bg:'#FEF2F2' },
-  { type:'warning', icon:Clock, title:'事前審査の回答期限が近い案件があります', sub:'3件の案件が対象です', date:'2024/07/10', color:'#f59e0b', bg:'#FFFBEB' },
-  { type:'info', icon:RefreshCw, title:'金利が更新された銀行があります', sub:'住信SBIネット銀行、楽天銀行 など', date:'2024/07/09', color:'#3b82f6', bg:'#EFF6FF' },
-  { type:'success', icon:CheckCircle, title:'事前審査が承認されました', sub:'田中 様（住信SBIネット銀行）', date:'2024/07/09', color:'#10b981', bg:'#ECFDF5' },
+  { type:'error', icon:AlertTriangle, title:'最終確認日が30日以上前の銀行があります', sub:'7件の銀行が対象です', date:relDateSlash(0), color:'#ef4444', bg:'#FEF2F2' },
+  { type:'warning', icon:Clock, title:'事前審査の回答期限が近い案件があります', sub:'3件の案件が対象です', date:relDateSlash(0), color:'#f59e0b', bg:'#FFFBEB' },
+  { type:'info', icon:RefreshCw, title:'金利が更新された銀行があります', sub:'住信SBIネット銀行、楽天銀行 など', date:relDateSlash(-1), color:'#3b82f6', bg:'#EFF6FF' },
+  { type:'success', icon:CheckCircle, title:'事前審査が承認されました', sub:'田中 様（住信SBIネット銀行）', date:relDateSlash(-1), color:'#10b981', bg:'#ECFDF5' },
 ];
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const { tasks, addTask: fsAddTask, toggleTask, deleteTask } = useTasks();
   const [newText, setNewText] = useState('');
   const [newTag, setNewTag] = useState(TAG_OPTIONS[0]);
   const [newDate, setNewDate] = useState('');
   const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
-    const saved = loadFromStorage<Task[]>(STORAGE_KEYS.TASKS, []);
-    setTasks(saved.length > 0 ? saved : SAMPLE_TASKS);
-  }, []);
-
-  const persist = (next: Task[]) => {
-    setTasks(next);
-    saveToStorage(STORAGE_KEYS.TASKS, next);
+  const toggle = (id: string) => {
+    const t = tasks.find(x => x.id === id);
+    if (t) toggleTask(id, !t.done);
   };
-
-  const toggle = (id: string) => persist(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
-  const remove = (id: string) => persist(tasks.filter(t => t.id !== id));
+  const remove = (id: string) => deleteTask(id);
 
   const addTask = () => {
     if (!newText.trim()) return;
-    const t: Task = { id: String(Date.now()), text: newText.trim(), tag: newTag.label, tagColor: newTag.color, tagBg: newTag.bg, date: newDate, done: false };
-    persist([...tasks, t]);
+    fsAddTask({ text: newText.trim(), tag: newTag.label, tagColor: newTag.color, tagBg: newTag.bg, date: newDate, done: false });
     setNewText(''); setNewDate(''); setAdding(false);
   };
 
-  const pending = tasks.filter(t => !t.done);
-  const done = tasks.filter(t => t.done);
+  const displayTasks = tasks.length === 0 ? SAMPLE_TASKS : tasks;
+  const pending = displayTasks.filter(t => !t.done);
+  const done = displayTasks.filter(t => t.done);
 
   return (
     <div className="p-4 md:p-7 max-w-5xl">

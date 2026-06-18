@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useMemo } from "react";
 import {
   MapPin, Plus, Pencil, Trash2, X, Save, Search, Phone, Mail,
   ChevronDown, AlertTriangle, CheckCircle, HelpCircle,
 } from "lucide-react";
-import { loadAreaMaster, saveAreaMaster, AREA_MASTER_DEFAULTS } from "@/lib/areaMasterStorage";
+import { useAreaMaster } from "@/hooks/useAreaMaster";
+import { AREA_MASTER_DEFAULTS } from "@/lib/areaMasterStorage";
 import { judgeAreaMaster, AREA_JUDGMENT_LABELS, AREA_JUDGMENT_STYLES } from "@/lib/areaUtils";
 import { INSTITUTION_TYPE_LABELS } from "@/types";
 import type { AreaMasterEntry, InstitutionType } from "@/types";
 import type { AreaJudgment } from "@/lib/areaUtils";
+import { PrefCityTagInput } from "@/components/PrefCityTagInput";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -169,7 +171,7 @@ function EntryModal({ entry, onSave, onClose }: {
             <div>
               <label className={labelCls} style={labelStyle}>支店名</label>
               <input className={inputCls} style={inputStyle} value={form.branchName}
-                onChange={e => set('branchName', e.target.value)} placeholder="松原支店" />
+                onChange={e => set('branchName', e.target.value)} placeholder="○○市支店" />
             </div>
           </div>
 
@@ -189,22 +191,23 @@ function EntryModal({ entry, onSave, onClose }: {
           <div>
             <label className={labelCls} style={labelStyle}>融資対象エリア</label>
             <p className="text-xs mb-2" style={{ color: '#9CA3AF' }}>
-              例：大阪府松原市 / 奈良県全域 / 関西 / 全国
+              都道府県＋市区町村で登録。「全国」「関西」「奈良県全域」などフリーワードも可。
             </p>
-            <TagInput
+            <PrefCityTagInput
               tags={form.targetAreas}
               onChange={v => set('targetAreas', v)}
-              placeholder="エリアを入力してEnter（例：大阪府松原市）"
               color={{ bg: '#DCFCE7', text: '#15803D' }}
             />
           </div>
 
           <div>
             <label className={labelCls} style={labelStyle}>対象外エリア</label>
-            <TagInput
+            <p className="text-xs mb-2" style={{ color: '#9CA3AF' }}>
+              対象外にする都道府県・市区町村を登録します。
+            </p>
+            <PrefCityTagInput
               tags={form.excludedAreas}
               onChange={v => set('excludedAreas', v)}
-              placeholder="対象外エリアを入力してEnter（例：兵庫県全域）"
               color={{ bg: '#FEE2E2', text: '#DC2626' }}
             />
           </div>
@@ -280,38 +283,33 @@ function JudgeBadge({ judgment }: { judgment: AreaJudgment }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AreaMasterPage() {
-  const [entries, setEntries] = useState<AreaMasterEntry[]>([]);
+  const { entries, addEntry, updateEntry, deleteEntry } = useAreaMaster();
   const [modal, setModal] = useState<'add' | AreaMasterEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AreaMasterEntry | null>(null);
   const [search, setSearch] = useState('');
   const [addressSearch, setAddressSearch] = useState('');
   const [filterType, setFilterType] = useState<InstitutionType | 'all'>('all');
 
-  useEffect(() => { setEntries(loadAreaMaster()); }, []);
-
-  const save = useCallback((list: AreaMasterEntry[]) => {
-    setEntries(list);
-    saveAreaMaster(list);
-  }, []);
-
   const handleSave = (e: AreaMasterEntry) => {
     if (modal === 'add') {
-      save([...entries, e]);
+      const { id: _id, ...data } = e;
+      addEntry(data);
     } else {
-      save(entries.map(x => x.id === e.id ? e : x));
+      const { id, ...data } = e;
+      updateEntry(id, data);
     }
     setModal(null);
   };
 
   const handleDelete = () => {
     if (!deleteTarget) return;
-    save(entries.filter(x => x.id !== deleteTarget.id));
+    deleteEntry(deleteTarget.id);
     setDeleteTarget(null);
   };
 
   const handleReset = () => {
     if (!confirm('デフォルトデータにリセットしますか？')) return;
-    save(AREA_MASTER_DEFAULTS);
+    AREA_MASTER_DEFAULTS.forEach(e => { const { id: _id, ...data } = e; addEntry(data); });
   };
 
   const filtered = useMemo(() => {
@@ -367,7 +365,7 @@ export default function AreaMasterPage() {
           <input
             value={addressSearch}
             onChange={e => setAddressSearch(e.target.value)}
-            placeholder="例：大阪府松原市〇〇町"
+            placeholder="例：大阪府○○市〇〇町"
             className="flex-1 px-4 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: '#F9FAFB', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
           />

@@ -1,12 +1,12 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Users, Plus, Pencil, Trash2, Search, X, Save } from "lucide-react";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { useCustomers } from "@/hooks/useCustomers";
 import type { Customer } from "@/types";
 
 const CUSTOMER_STATUSES = ['情報収集中','提案中','前審査待ち','事前審査中','本審査中','契約準備中','契約済'];
-const EMPLOYMENT_TYPES = ['正社員','公務員','契約社員','パート・アルバイト','自営業','その他'];
+const EMPLOYMENT_TYPES  = ['正社員','公務員','契約社員','パート・アルバイト','自営業','その他'];
 
 const STATUS_STYLE: Record<string, { color: string; bg: string }> = {
   '情報収集中': { color: '#64748b', bg: '#F1F5F9' },
@@ -17,12 +17,6 @@ const STATUS_STYLE: Record<string, { color: string; bg: string }> = {
   '契約準備中': { color: '#10b981', bg: '#D1FAE5' },
   '契約済':     { color: '#10b981', bg: '#A7F3D0' },
 };
-
-const SAMPLE: Customer[] = [
-  { id:'1', name:'田中 健一', age:'35', employer:'株式会社ABC', yearsEmployed:'10', income:'600', spouseIncome:'0', employment:'正社員', savings:'500', existingLoan:'0', desiredAmount:'4000', desiredPayment:'12', area:'東京都', builder:'ハウスメーカーA', referral:'紹介', memo:'夫婦での合算検討中', status:'事前審査中', createdAt:'2024-07-01' },
-  { id:'2', name:'佐藤 美咲', age:'32', employer:'株式会社XYZ', yearsEmployed:'5', income:'450', spouseIncome:'300', employment:'正社員', savings:'300', existingLoan:'0', desiredAmount:'3500', desiredPayment:'10', area:'神奈川県', builder:'工務店B', referral:'展示場', memo:'配偶者合算で申込希望', status:'提案中', createdAt:'2024-07-03' },
-  { id:'3', name:'鈴木 大輔', age:'40', employer:'公務員', yearsEmployed:'15', income:'700', spouseIncome:'0', employment:'公務員', savings:'800', existingLoan:'3', desiredAmount:'5000', desiredPayment:'15', area:'大阪府', builder:'ハウスメーカーC', referral:'WEB', memo:'カーローン残あり', status:'前審査待ち', createdAt:'2024-07-05' },
-];
 
 const EMPTY: Omit<Customer,'id'|'createdAt'> = {
   name:'', age:'', employer:'', yearsEmployed:'', income:'', spouseIncome:'',
@@ -40,7 +34,7 @@ function Label({ children }: { children: React.ReactNode }) {
 
 function Modal({ record, onSave, onClose }: {
   record: Partial<Customer> | null;
-  onSave: (c: Customer) => void;
+  onSave: (c: Omit<Customer, 'id'>) => void;
   onClose: () => void;
 }) {
   const existing = record as Customer | null;
@@ -82,9 +76,9 @@ function Modal({ record, onSave, onClose }: {
             <textarea className={cls} style={{ ...iStyle, resize:'none' } as React.CSSProperties} rows={3} value={form.memo} onChange={e=>set('memo')(e.target.value)} placeholder="特記事項..."/>
           </div>
         </div>
-        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderBottom:'none', borderTop:'1px solid var(--border)' }}>
+        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop:'1px solid var(--border)' }}>
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition-colors" style={{ border:'1px solid var(--border)', color:'var(--text-secondary)' }}>キャンセル</button>
-          <button onClick={() => onSave({ ...form, id: existing?.id ?? String(Date.now()), createdAt: existing?.createdAt ?? new Date().toISOString().split('T')[0] })}
+          <button onClick={() => onSave({ ...form, createdAt: existing?.createdAt ?? new Date().toISOString().split('T')[0] })}
             className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
             style={{ background:'linear-gradient(135deg,#3b82f6,#6366f1)', color:'#fff' }}>
             <Save size={14}/> 保存する
@@ -96,24 +90,19 @@ function Modal({ record, onSave, onClose }: {
 }
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [modal, setModal] = useState<Partial<Customer> | null | false>(false);
-  const [search, setSearch] = useState('');
-  const [deleteId, setDeleteId] = useState<string|null>(null);
+  const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomers();
+  const [editTarget, setEditTarget] = useState<Partial<Customer> | null | false>(false);
+  const [search,    setSearch]    = useState('');
+  const [deleteId,  setDeleteId]  = useState<string | null>(null);
 
-  useEffect(() => {
-    const saved = loadFromStorage<Customer[]>(STORAGE_KEYS.CUSTOMERS, []);
-    setCustomers(saved.length > 0 ? saved : SAMPLE);
-  }, []);
-
-  const persist = useCallback((next: Customer[]) => {
-    setCustomers(next);
-    saveToStorage(STORAGE_KEYS.CUSTOMERS, next);
-  }, []);
-
-  const handleSave = (c: Customer) => {
-    persist(customers.some(x => x.id === c.id) ? customers.map(x => x.id === c.id ? c : x) : [...customers, c]);
-    setModal(false);
+  const handleSave = (data: Omit<Customer, 'id'>) => {
+    const id = (editTarget as Customer | null)?.id;
+    if (id) {
+      updateCustomer(id, data);
+    } else {
+      addCustomer(data);
+    }
+    setEditTarget(false);
   };
 
   const filtered = customers.filter(c => {
@@ -133,7 +122,7 @@ export default function CustomersPage() {
           </div>
           <p className="text-sm ml-12" style={{ color:'var(--text-secondary)' }}>全{customers.length}名の顧客情報を管理しています</p>
         </div>
-        <button onClick={() => setModal({})} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
+        <button onClick={() => setEditTarget({})} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
           style={{ background:'linear-gradient(135deg,#3b82f6,#6366f1)', color:'#fff' }}>
           <Plus size={16}/> 顧客を追加
         </button>
@@ -164,11 +153,11 @@ export default function CustomersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-1 rounded-lg text-xs font-medium" style={{ background:sc.bg, color:sc.color }}>{c.status}</span>
-                    <button onClick={() => setModal(c)} className="p-1.5 rounded-lg" style={{ background:'#EFF6FF' }}><Pencil size={13} style={{ color:'#3b82f6' }}/></button>
+                    <button onClick={() => setEditTarget(c)} className="p-1.5 rounded-lg" style={{ background:'#EFF6FF' }}><Pencil size={13} style={{ color:'#3b82f6' }}/></button>
                     <button onClick={() => setDeleteId(c.id)} className="p-1.5 rounded-lg" style={{ background:'#FEF2F2' }}><Trash2 size={13} style={{ color:'#ef4444' }}/></button>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-xs mt-2" style={{ color:'var(--text-secondary)' }}>
+                <div className="grid grid-cols-3 gap-2 text-xs mt-2">
                   <div><span style={{ color:'var(--text-muted)' }}>年収</span><br/><b style={{ color:'var(--text-primary)' }}>{c.income ? `${c.income}万円` : '—'}</b></div>
                   <div><span style={{ color:'var(--text-muted)' }}>借入希望</span><br/><b style={{ color:'var(--text-primary)' }}>{c.desiredAmount ? `${c.desiredAmount}万円` : '—'}</b></div>
                   <div><span style={{ color:'var(--text-muted)' }}>登録日</span><br/>{c.createdAt}</div>
@@ -209,7 +198,7 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-xs" style={{ color:'var(--text-muted)' }}>{c.createdAt}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => setModal(c)} className="p-1.5 rounded-lg hover:bg-gray-50"><Pencil size={13} style={{ color:'#3b82f6' }}/></button>
+                        <button onClick={() => setEditTarget(c)} className="p-1.5 rounded-lg hover:bg-gray-50"><Pencil size={13} style={{ color:'#3b82f6' }}/></button>
                         <button onClick={() => setDeleteId(c.id)} className="p-1.5 rounded-lg hover:bg-gray-50"><Trash2 size={13} style={{ color:'#ef4444' }}/></button>
                       </div>
                     </td>
@@ -220,7 +209,7 @@ export default function CustomersPage() {
         </table>
       </div>
 
-      {modal !== false && <Modal record={modal} onSave={handleSave} onClose={() => setModal(false)}/>}
+      {editTarget !== false && <Modal record={editTarget} onSave={handleSave} onClose={() => setEditTarget(false)}/>}
 
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background:'rgba(0,0,0,0.7)' }}>
@@ -229,7 +218,7 @@ export default function CustomersPage() {
             <p className="text-sm mb-5" style={{ color:'var(--text-secondary)' }}>この顧客データを削除しますか？この操作は元に戻せません。</p>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setDeleteId(null)} className="px-4 py-2 rounded-xl text-sm hover:bg-gray-50" style={{ border:'1px solid var(--border)', color:'var(--text-secondary)' }}>キャンセル</button>
-              <button onClick={() => { persist(customers.filter(c => c.id !== deleteId)); setDeleteId(null); }}
+              <button onClick={() => { deleteCustomer(deleteId!); setDeleteId(null); }}
                 className="px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90" style={{ background:'#ef4444', color:'#fff' }}>削除する</button>
             </div>
           </div>

@@ -8,9 +8,11 @@ import {
   MapPin, Phone, Mail, User,
 } from "lucide-react";
 import { useBanks } from "@/hooks/useBanks";
+import { useLoanScheduleTemplates } from "@/hooks/useLoanScheduleTemplates";
+import { PrefCityTagInput } from "@/components/PrefCityTagInput";
 import { BANKS } from "@/lib/banks";
-import { FIXED_PERIOD_LABELS, SUPPORT_LEVEL_LABELS, SUPPORT_LEVEL_STYLES, REPAYMENT_TIMING_LABELS } from "@/types";
-import type { BankMaster, BankContact, EmploymentType, LoanImpactLevel, ProductType, FixedPeriodType, SupportLevel, RepaymentStartTiming } from "@/types";
+import { FIXED_PERIOD_LABELS, SUPPORT_LEVEL_LABELS, SUPPORT_LEVEL_STYLES, REPAYMENT_TIMING_LABELS, LOAN_DATE_LABELS } from "@/types";
+import type { BankMaster, BankContact, EmploymentType, LoanImpactLevel, ProductType, FixedPeriodType, SupportLevel, RepaymentStartTiming, LoanDateKey, TemplateTask } from "@/types";
 
 // ── Tag Input ────────────────────────────────────────────────────────────────
 
@@ -311,9 +313,231 @@ function DetailPanel({ b, onEdit, onDelete }: {
   );
 }
 
+// ── Schedule Template Tab ─────────────────────────────────────────────────────
+
+const LOAN_DATE_OPTIONS = Object.entries(LOAN_DATE_LABELS) as [LoanDateKey, string][];
+
+type TaskDraft = { name: string; baseDateKey: LoanDateKey; offsetDays: number; notes: string };
+const emptyTaskDraft = (): TaskDraft => ({ name: '', baseDateKey: 'mainApplicationDate', offsetDays: -7, notes: '' });
+
+function TemplateTabContent({ bankId }: { bankId: string }) {
+  const { addTemplate, updateTemplate, deleteTemplate, addTask, updateTask, deleteTask, getByBankOnly } = useLoanScheduleTemplates();
+  const bankTemplates = getByBankOnly(bankId);
+
+  const [newName, setNewName] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyTaskDraft());
+  const [editingTask, setEditingTask] = useState<{ templateId: string; taskId: string } | null>(null);
+  const [editDraft, setEditDraft] = useState<TaskDraft>(emptyTaskDraft());
+
+  const inputCls = "w-full px-3 py-1.5 rounded-lg text-xs outline-none";
+  const inputSt = { background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#111827' };
+
+  const handleAddTemplate = () => {
+    if (!newName.trim()) return;
+    const t = addTemplate({ name: newName.trim(), bankId, tasks: [] });
+    setNewName('');
+    setExpandedId(t.id);
+  };
+
+  const startAddTask = (tid: string) => {
+    setEditingTask(null);
+    setTaskDraft(emptyTaskDraft());
+    setAddingTo(tid);
+  };
+
+  const handleAddTask = (tid: string) => {
+    if (!taskDraft.name.trim()) return;
+    addTask(tid, { ...taskDraft, requiredDocuments: [] });
+    setAddingTo(null);
+    setTaskDraft(emptyTaskDraft());
+  };
+
+  const startEditTask = (tid: string, task: TemplateTask) => {
+    setAddingTo(null);
+    setEditingTask({ templateId: tid, taskId: task.id });
+    setEditDraft({ name: task.name, baseDateKey: task.baseDateKey, offsetDays: task.offsetDays, notes: task.notes ?? '' });
+  };
+
+  const handleSaveEditTask = () => {
+    if (!editingTask || !editDraft.name.trim()) return;
+    updateTask(editingTask.templateId, editingTask.taskId, { ...editDraft });
+    setEditingTask(null);
+  };
+
+  const TaskForm = ({ draft, setDraft, onSave, onCancel }: {
+    draft: TaskDraft;
+    setDraft: (d: TaskDraft) => void;
+    onSave: () => void;
+    onCancel: () => void;
+  }) => (
+    <div className="mt-2 p-3 rounded-xl space-y-2" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+      <div>
+        <div className="text-xs font-semibold mb-1" style={{ color: '#374151' }}>タスク名</div>
+        <input className={inputCls} style={inputSt} value={draft.name}
+          onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="例：事前審査書類準備" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#374151' }}>基準日</div>
+          <select className={inputCls} style={inputSt} value={draft.baseDateKey}
+            onChange={e => setDraft({ ...draft, baseDateKey: e.target.value as LoanDateKey })}>
+            {LOAN_DATE_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#374151' }}>オフセット（日）</div>
+          <input type="number" className={inputCls} style={inputSt} value={draft.offsetDays}
+            onChange={e => setDraft({ ...draft, offsetDays: Number(e.target.value) })}
+            placeholder="-7（7日前）" />
+          <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
+            {draft.offsetDays < 0 ? `${Math.abs(draft.offsetDays)}日前` : draft.offsetDays === 0 ? '当日' : `${draft.offsetDays}日後`}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div className="text-xs font-semibold mb-1" style={{ color: '#374151' }}>メモ（任意）</div>
+        <input className={inputCls} style={inputSt} value={draft.notes}
+          onChange={e => setDraft({ ...draft, notes: e.target.value })} placeholder="備考・注意事項" />
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="px-3 py-1 rounded-lg text-xs"
+          style={{ background: '#F3F4F6', color: '#374151' }}>キャンセル</button>
+        <button onClick={onSave} className="px-3 py-1 rounded-lg text-xs font-semibold"
+          style={{ background: '#2563EB', color: '#fff' }}>保存</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 rounded-xl text-xs" style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+        この銀行専用のスケジュールテンプレートを管理します。ローンスケジュール画面でこのテンプレートを選択できます。
+      </div>
+
+      {/* 新規テンプレート追加 */}
+      <div className="flex gap-2">
+        <input className="flex-1 px-3 py-2 rounded-lg text-xs outline-none"
+          style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#111827' }}
+          value={newName} onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleAddTemplate(); }}
+          placeholder="新しいテンプレート名（例：標準スケジュール）" />
+        <button onClick={handleAddTemplate}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold"
+          style={{ background: '#DBEAFE', color: '#1D4ED8', border: '1px solid #93C5FD', whiteSpace: 'nowrap' }}>
+          <Plus size={12} />追加
+        </button>
+      </div>
+
+      {bankTemplates.length === 0 && (
+        <div className="text-center py-8 text-xs" style={{ color: '#9CA3AF' }}>
+          この銀行のテンプレートはまだありません。上から追加してください。
+        </div>
+      )}
+
+      {bankTemplates.map(tmpl => {
+        const isExpanded = expandedId === tmpl.id;
+        return (
+          <div key={tmpl.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
+            {/* テンプレートヘッダー */}
+            <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: '#F9FAFB', borderBottom: isExpanded ? '1px solid #E5E7EB' : 'none' }}>
+              <button onClick={() => setExpandedId(isExpanded ? null : tmpl.id)}
+                className="shrink-0 p-0.5 rounded transition-colors"
+                style={{ color: '#6B7280' }}>
+                <ChevronRight size={14} style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+              </button>
+              <input
+                className="flex-1 px-2 py-1 rounded-lg text-xs font-semibold outline-none"
+                style={{ background: 'transparent', border: '1px solid transparent', color: '#111827' }}
+                onFocus={e => (e.currentTarget.style.border = '1px solid #93C5FD')}
+                onBlur={e => (e.currentTarget.style.border = '1px solid transparent')}
+                value={tmpl.name}
+                onChange={e => updateTemplate(tmpl.id, { name: e.target.value })}
+              />
+              <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#EFF6FF', color: '#3B82F6' }}>
+                {tmpl.tasks.length}タスク
+              </span>
+              <button onClick={() => { if (confirm(`「${tmpl.name}」を削除しますか？`)) deleteTemplate(tmpl.id); }}
+                className="p-1 rounded-lg transition-colors"
+                style={{ color: '#DC2626' }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+
+            {/* タスク一覧 */}
+            {isExpanded && (
+              <div className="p-3 space-y-1.5">
+                {tmpl.tasks.length === 0 && addingTo !== tmpl.id && (
+                  <div className="text-xs text-center py-3" style={{ color: '#9CA3AF' }}>
+                    タスクがありません。下の「＋タスク追加」から追加してください。
+                  </div>
+                )}
+
+                {tmpl.tasks.map(task => {
+                  const isEditing = editingTask?.taskId === task.id;
+                  return (
+                    <div key={task.id}>
+                      {isEditing ? (
+                        <TaskForm
+                          draft={editDraft}
+                          setDraft={setEditDraft}
+                          onSave={handleSaveEditTask}
+                          onCancel={() => setEditingTask(null)}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg group"
+                          style={{ background: '#fff', border: '1px solid #F3F4F6' }}>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium truncate" style={{ color: '#111827' }}>{task.name}</div>
+                            <div className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
+                              {LOAN_DATE_LABELS[task.baseDateKey]}
+                              {task.offsetDays < 0 ? ` の${Math.abs(task.offsetDays)}日前` : task.offsetDays === 0 ? ' 当日' : ` の${task.offsetDays}日後`}
+                            </div>
+                          </div>
+                          <button onClick={() => startEditTask(tmpl.id, task)}
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{ color: '#3B82F6' }}>
+                            <Pencil size={12} />
+                          </button>
+                          <button onClick={() => deleteTask(tmpl.id, task.id)}
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{ color: '#DC2626' }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* タスク追加フォーム */}
+                {addingTo === tmpl.id ? (
+                  <TaskForm
+                    draft={taskDraft}
+                    setDraft={setTaskDraft}
+                    onSave={() => handleAddTask(tmpl.id)}
+                    onCancel={() => setAddingTo(null)}
+                  />
+                ) : (
+                  <button onClick={() => startAddTask(tmpl.id)}
+                    className="w-full mt-1 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    style={{ background: '#F0FDF4', color: '#15803D', border: '1px dashed #86EFAC' }}>
+                    ＋ タスク追加
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Bank Form Modal ───────────────────────────────────────────────────────────
 
-type FormTab = '基本情報' | '審査条件' | '雇用・属性' | 'ローン・団信' | '申込・審査' | 'つなぎ融資' | '融資エリア' | '連絡先' | '営業メモ';
+type FormTab = '基本情報' | '審査条件' | '雇用・属性' | 'ローン・団信' | '申込・審査' | 'つなぎ融資' | '融資エリア' | '連絡先' | '営業メモ' | 'スケジュールテンプレート';
 
 function BankModal({ bank, onSave, onClose }: {
   bank: Partial<BankMaster> | null;
@@ -391,7 +615,7 @@ function BankModal({ bank, onSave, onClose }: {
   const labelCls = "block text-xs font-semibold mb-1.5";
   const labelStyle = { color: '#374151' };
 
-  const tabs: FormTab[] = ['基本情報', '審査条件', '雇用・属性', 'ローン・団信', '申込・審査', 'つなぎ融資', '融資エリア', '連絡先', '営業メモ'];
+  const tabs: FormTab[] = ['基本情報', '審査条件', '雇用・属性', 'ローン・団信', '申込・審査', 'つなぎ融資', '融資エリア', '連絡先', '営業メモ', 'スケジュールテンプレート'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
@@ -866,32 +1090,24 @@ function BankModal({ bank, onSave, onClose }: {
           {tab === '融資エリア' && (
             <div className="space-y-5">
               <div className="p-4 rounded-xl" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-2">
                   <MapPin size={13} style={{ color: '#15803D' }} />
                   <span className="text-xs font-bold" style={{ color: '#15803D' }}>融資対象エリア</span>
                 </div>
-                <p className="text-xs mb-3" style={{ color: '#166534' }}>
-                  例：大阪府松原市 / 奈良県全域 / 関西 / 全国
-                </p>
-                <TagInput
+                <PrefCityTagInput
                   tags={form.targetAreas ?? []}
                   onChange={v => set('targetAreas', v)}
-                  placeholder="エリアを入力してEnter（例：大阪府松原市）"
                   color={{ bg: '#DCFCE7', text: '#15803D' }}
                 />
               </div>
               <div className="p-4 rounded-xl" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-2">
                   <X size={13} style={{ color: '#DC2626' }} />
                   <span className="text-xs font-bold" style={{ color: '#DC2626' }}>対象外エリア</span>
                 </div>
-                <p className="text-xs mb-3" style={{ color: '#991B1B' }}>
-                  対象外エリアを明示したい場合に登録します
-                </p>
-                <TagInput
+                <PrefCityTagInput
                   tags={form.excludedAreas ?? []}
                   onChange={v => set('excludedAreas', v)}
-                  placeholder="除外エリアを入力してEnter（例：兵庫県全域）"
                   color={{ bg: '#FEE2E2', text: '#DC2626' }}
                 />
               </div>
@@ -920,12 +1136,12 @@ function BankModal({ bank, onSave, onClose }: {
                 </div>
                 <div>
                   <label className={labelCls} style={labelStyle}>支店名</label>
-                  <input className={`${inputCls} ${inputFocus}`} style={inputStyle} value={c.branch} onChange={e => setC('branch', e.target.value)} placeholder="松原支店" />
+                  <input className={`${inputCls} ${inputFocus}`} style={inputStyle} value={c.branch} onChange={e => setC('branch', e.target.value)} placeholder="○○市支店" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={labelCls} style={labelStyle}><Phone size={11} className="inline mr-1" />電話番号</label>
-                    <input className={`${inputCls} ${inputFocus}`} style={inputStyle} value={c.phone} onChange={e => setC('phone', e.target.value)} placeholder="072-333-XXXX" />
+                    <input className={`${inputCls} ${inputFocus}`} style={inputStyle} value={c.phone} onChange={e => setC('phone', e.target.value)} placeholder="06-XXXX-XXXX" />
                   </div>
                   <div>
                     <label className={labelCls} style={labelStyle}><Phone size={11} className="inline mr-1" />携帯番号</label>
@@ -956,6 +1172,21 @@ function BankModal({ bank, onSave, onClose }: {
               </div>
             );
           })()}
+
+          {/* ── スケジュールテンプレート ── */}
+          {tab === 'スケジュールテンプレート' && (
+            isNew ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: '#FEF3C7' }}>
+                  <Save size={20} style={{ color: '#D97706' }} />
+                </div>
+                <p className="text-sm font-semibold" style={{ color: '#111827' }}>先に銀行情報を保存してください</p>
+                <p className="text-xs" style={{ color: '#6B7280' }}>銀行を追加してから、テンプレートタブで編集できます。</p>
+              </div>
+            ) : (
+              <TemplateTabContent bankId={bank!.id!} />
+            )
+          )}
 
           {/* ── 営業メモ ── */}
           {tab === '営業メモ' && (

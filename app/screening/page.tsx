@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   ClipboardList, Plus, Pencil, Trash2, X, Save, Search, Filter,
   Globe, FileText, Calendar, Clock, CheckCircle, AlertTriangle,
 } from "lucide-react";
-import { loadScreenings, saveScreenings } from "@/lib/screeningStorage";
+import { useScreenings } from "@/hooks/useScreenings";
 import { useBanks } from "@/hooks/useBanks";
 import type { ScreeningRecord, ScreeningStatus, ApplicationMethod } from "@/types";
 
@@ -267,39 +267,37 @@ function ScreeningModal({ record, bankNames, onSave, onClose }: {
 
 export default function ScreeningPage() {
   const { banks } = useBanks();
-  const [records, setRecords] = useState<ScreeningRecord[]>([]);
+  const { screenings: records, addScreening, updateScreening, deleteScreening } = useScreenings();
   const [modal, setModal] = useState<Partial<ScreeningRecord> | null | false>(false);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<ScreeningStatus | ''>('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Check for pending record pre-filled from diagnosis page
   useEffect(() => {
-    const saved = loadScreenings();
-    setRecords(saved.length > 0 ? saved : SAMPLE_DATA);
-    // Check for pending record from diagnosis page
     const pendingRaw = typeof window !== 'undefined' ? localStorage.getItem('loan_navi_screening_pending') : null;
     if (pendingRaw) {
       try {
         localStorage.removeItem('loan_navi_screening_pending');
-        const pending = JSON.parse(pendingRaw) as Partial<ScreeningRecord>;
-        setModal(pending);
+        setModal(JSON.parse(pendingRaw) as Partial<ScreeningRecord>);
       } catch { /* ignore */ }
     }
   }, []);
 
-  const persist = useCallback((next: ScreeningRecord[]) => {
-    setRecords(next);
-    saveScreenings(next);
-  }, []);
-
   const handleSave = (r: ScreeningRecord) => {
     const exists = records.some(x => x.id === r.id);
-    persist(exists ? records.map(x => x.id === r.id ? r : x) : [r, ...records]);
+    if (exists) {
+      const { id, ...data } = r;
+      updateScreening(id, data);
+    } else {
+      const { id: _id, createdAt: _ca, ...data } = r;
+      addScreening(data);
+    }
     setModal(false);
   };
 
   const handleDelete = (id: string) => {
-    persist(records.filter(r => r.id !== id));
+    deleteScreening(id);
     setDeleteId(null);
   };
 

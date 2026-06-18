@@ -6,14 +6,12 @@ export const metadata: Metadata = {
   description: "住宅営業マン向け住宅ローン業務プラットフォーム",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja" className="h-full">
-      <body className="h-full">{children}</body>
+      <body className="h-full">
+        {children}
+      </body>
     </html>
   );
 }
