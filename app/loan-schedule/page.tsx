@@ -4,12 +4,13 @@ import { useState, useMemo } from "react";
 import {
   CalendarDays, ListChecks, GitBranch, Plus, ChevronRight,
   AlertCircle, CheckCircle2, Clock, Search, X, Trash2,
-  FileText, User, Building2, Save, Zap, BarChart2,
+  FileText, User, Building2, Save, Zap, BarChart2, Printer,
 } from "lucide-react";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useBanks } from "@/hooks/useBanks";
 import { useLoanSchedules } from "@/hooks/useLoanSchedules";
 import { useLoanScheduleTemplates } from "@/hooks/useLoanScheduleTemplates";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import {
   LOAN_DATE_LABELS, TASK_STATUS_LABELS, TASK_STATUS_STYLES,
   type LoanDateKey, type LoanTask, type TaskStatus, type LoanSchedule,
@@ -853,6 +854,7 @@ function DateInputSection({
 export default function LoanSchedulePage() {
   const { customers } = useCustomers();
   const { banks }     = useBanks();
+  const { profile }   = useUserProfile();
   const {
     schedules, getByCustomer, upsert, applyTemplate,
     updateTaskStatus, updateTask, addTask, deleteTask, getAlerts,
@@ -907,6 +909,17 @@ export default function LoanSchedulePage() {
     if (!tmpl) return;
     applyTemplate(selectedCustomerId, tmpl.tasks, schedule.dates, schedule.bankId, schedule.bankName);
     setShowTemplateModal(false);
+  };
+
+  const handleOpenPdf = () => {
+    if (!schedule || !selectedCustomer) return;
+    const params = new URLSearchParams({
+      scheduleId:   schedule.id,
+      customerName: selectedCustomer.name,
+      staffName:    profile.name ?? "",
+      bankName:     schedule.bankName ?? "",
+    });
+    window.open(`/loan-schedule-print?${params.toString()}`, "_blank");
   };
 
   const handleCreateSchedule = () => {
@@ -1064,11 +1077,18 @@ export default function LoanSchedulePage() {
 
               <div className="flex items-center gap-2">
                 {schedule && (
-                  <button onClick={() => setShowTemplateModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
-                    style={{ background: "#F0FDF4", color: "#16A34A", border: "1px solid #DCFCE7" }}>
-                    <Zap size={12} />テンプレートから生成
-                  </button>
+                  <>
+                    <button onClick={handleOpenPdf}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
+                      style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
+                      <Printer size={12} />PDF出力
+                    </button>
+                    <button onClick={() => setShowTemplateModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
+                      style={{ background: "#F0FDF4", color: "#16A34A", border: "1px solid #DCFCE7" }}>
+                      <Zap size={12} />テンプレートから生成
+                    </button>
+                  </>
                 )}
                 <button onClick={() => setSelectedCustomerId(null)}
                   className="p-2 rounded-lg hover:opacity-70">

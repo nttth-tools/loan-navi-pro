@@ -81,9 +81,18 @@ export interface BankMaster {
   foreignNationalOk: boolean;
   permanentResidencyRequired: boolean;
 
+  // 審査金利・返済比率
+  screeningRate?: number;        // 審査金利（%）
+  repaymentRatioMax?: number;    // 返済比率上限（%）
+
   // ローン組み方
   incomeAggregationOk: boolean;
   pairLoanOk: boolean;
+
+  // 属性条件（拡張）
+  matLeaveReturnOk?: boolean;      // 育休復帰予定可否
+  redBalanceSheetOk?: boolean;     // 赤字決算可否
+  debtConsolidationOk?: boolean;   // 既存借入おまとめ可否
 
   // 既存ローン影響
   carLoanImpact: LoanImpactLevel;
@@ -150,6 +159,7 @@ export const INSTITUTION_TYPE_LABELS: Record<InstitutionType, string> = {
 
 export interface AreaMasterEntry {
   id: string;
+  bankId?: string;            // 銀行マスタ BankMaster.id への参照
   institutionType: InstitutionType;
   institutionName: string;
   branchName: string;

@@ -2,14 +2,15 @@
 
 import React, { useState, useMemo } from "react";
 import {
-  MapPin, Plus, Pencil, Trash2, X, Save, Search, Phone, Mail,
-  ChevronDown, AlertTriangle, CheckCircle, HelpCircle,
+  MapPin, Plus, Pencil, Trash2, X, Save, Search, Phone,
+  AlertTriangle, CheckCircle, HelpCircle, Link2, Link2Off,
 } from "lucide-react";
 import { useAreaMaster } from "@/hooks/useAreaMaster";
+import { useBanks } from "@/hooks/useBanks";
 import { AREA_MASTER_DEFAULTS } from "@/lib/areaMasterStorage";
 import { judgeAreaMaster, AREA_JUDGMENT_LABELS, AREA_JUDGMENT_STYLES } from "@/lib/areaUtils";
 import { INSTITUTION_TYPE_LABELS } from "@/types";
-import type { AreaMasterEntry, InstitutionType } from "@/types";
+import type { AreaMasterEntry, InstitutionType, BankMaster } from "@/types";
 import type { AreaJudgment } from "@/lib/areaUtils";
 import { PrefCityTagInput } from "@/components/PrefCityTagInput";
 
@@ -29,6 +30,7 @@ const TYPE_COLORS: Record<InstitutionType, { bg: string; color: string }> = {
 
 function emptyEntry(): Omit<AreaMasterEntry, 'id'> {
   return {
+    bankId: undefined,
     institutionType: 'ja',
     institutionName: '',
     branchName: '',
@@ -94,8 +96,9 @@ function TagInput({ tags, onChange, placeholder, color }: {
 
 // ── Entry Modal ──────────────────────────────────────────────────────────────
 
-function EntryModal({ entry, onSave, onClose }: {
+function EntryModal({ entry, banks, onSave, onClose }: {
   entry: AreaMasterEntry | null;
+  banks: BankMaster[];
   onSave: (e: AreaMasterEntry) => void;
   onClose: () => void;
 }) {
@@ -103,6 +106,7 @@ function EntryModal({ entry, onSave, onClose }: {
   const [form, setForm] = useState<Omit<AreaMasterEntry, 'id'>>(() => ({
     ...emptyEntry(),
     ...(entry ? {
+      bankId: entry.bankId,
       institutionType: entry.institutionType,
       institutionName: entry.institutionName,
       branchName: entry.branchName,
@@ -114,14 +118,27 @@ function EntryModal({ entry, onSave, onClose }: {
       lastConfirmedDate: entry.lastConfirmedDate,
     } : {}),
   }));
+  // true = 銀行マスタから選択モード、false = 手入力モード
+  const [selectMode, setSelectMode] = useState<boolean>(!!entry?.bankId || isNew);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm(f => ({ ...f, [k]: v }));
+
+  const handleBankSelect = (bankId: string) => {
+    if (!bankId) {
+      setForm(f => ({ ...f, bankId: undefined, institutionName: '' }));
+    } else {
+      const bank = banks.find(b => b.id === bankId);
+      if (bank) setForm(f => ({ ...f, bankId: bank.id, institutionName: bank.name }));
+    }
+  };
 
   const handleSave = () => {
     if (!form.institutionName.trim()) { alert('金融機関名を入力してください'); return; }
     onSave({ ...form, id: entry?.id ?? `am_${Date.now()}` });
   };
+
+  const linkedBank = banks.find(b => b.id === form.bankId);
 
   const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none";
   const inputStyle = { background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#111827' };
@@ -141,6 +158,66 @@ function EntryModal({ entry, onSave, onClose }: {
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
+
+          {/* ── 銀行マスタ連携 ── */}
+          <div className="rounded-xl p-4" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Link2 size={13} style={{ color: '#0369A1' }} />
+              <span className="text-xs font-bold" style={{ color: '#0369A1' }}>金融機関（銀行マスタ連携）</span>
+              <div className="ml-auto flex gap-1">
+                <button type="button"
+                  onClick={() => { setSelectMode(true); setForm(f => ({ ...f, bankId: undefined, institutionName: '' })); }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                  style={{ background: selectMode ? '#0369A1' : '#E0F2FE', color: selectMode ? '#fff' : '#0369A1' }}>
+                  マスタから選択
+                </button>
+                <button type="button"
+                  onClick={() => { setSelectMode(false); setForm(f => ({ ...f, bankId: undefined })); }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                  style={{ background: !selectMode ? '#6B7280' : '#F3F4F6', color: !selectMode ? '#fff' : '#6B7280' }}>
+                  手入力
+                </button>
+              </div>
+            </div>
+
+            {selectMode ? (
+              <div>
+                <select
+                  className={inputCls}
+                  style={inputStyle}
+                  value={form.bankId ?? ''}
+                  onChange={e => handleBankSelect(e.target.value)}
+                >
+                  <option value="">-- 銀行マスタから選択 --</option>
+                  {banks.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}（{b.productName}）</option>
+                  ))}
+                </select>
+                {linkedBank && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: '#15803D' }}>
+                    <CheckCircle size={12} />
+                    <span className="font-semibold">{linkedBank.name}</span>
+                    <span style={{ color: '#6B7280' }}>と連携中 — 銀行名が変更されると自動同期</span>
+                  </div>
+                )}
+                {!form.bankId && (
+                  <p className="mt-1.5 text-xs" style={{ color: '#9CA3AF' }}>
+                    選択すると銀行名が自動入力され、銀行マスタの変更が自動反映されます
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <input className={inputCls} style={inputStyle} value={form.institutionName}
+                  onChange={e => set('institutionName', e.target.value)}
+                  placeholder="JA大阪中河内" />
+                <p className="mt-1.5 text-xs" style={{ color: '#9CA3AF' }}>
+                  銀行マスタ未登録の金融機関（JA・信金など）を手入力できます
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* 種別 */}
           <div>
             <label className={labelCls} style={labelStyle}>金融機関種別</label>
@@ -163,10 +240,17 @@ function EntryModal({ entry, onSave, onClose }: {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {/* 銀行名（マスタ選択時はreadonly表示） */}
             <div>
-              <label className={labelCls} style={labelStyle}>金融機関名 *</label>
-              <input className={inputCls} style={inputStyle} value={form.institutionName}
-                onChange={e => set('institutionName', e.target.value)} placeholder="JA大阪中河内" />
+              <label className={labelCls} style={labelStyle}>金融機関名</label>
+              {selectMode ? (
+                <div className="px-3 py-2 rounded-lg text-sm" style={{ background: form.bankId ? '#F0FDF4' : '#F9FAFB', border: '1px solid #E5E7EB', color: form.bankId ? '#15803D' : '#9CA3AF', minHeight: '38px' }}>
+                  {form.institutionName || '（上で選択してください）'}
+                </div>
+              ) : (
+                <input className={inputCls} style={inputStyle} value={form.institutionName}
+                  onChange={e => set('institutionName', e.target.value)} placeholder="JA大阪中河内" />
+              )}
             </div>
             <div>
               <label className={labelCls} style={labelStyle}>支店名</label>
@@ -282,23 +366,109 @@ function JudgeBadge({ judgment }: { judgment: AreaJudgment }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+// ── "銀行マスタに追加しますか" mini-dialog ────────────────────────────────────
+
+function AddToBankPrompt({ name, onConfirm, onSkip }: {
+  name: string;
+  onConfirm: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#EFF6FF' }}>
+            <Link2 size={18} style={{ color: '#3B82F6' }} />
+          </div>
+          <div>
+            <p className="font-bold text-sm" style={{ color: '#111827' }}>銀行マスタにも追加しますか？</p>
+            <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
+              <strong>{name}</strong> は銀行マスタに未登録です
+            </p>
+          </div>
+        </div>
+        <p className="text-xs mb-4" style={{ color: '#374151' }}>
+          銀行マスタに追加すると、今後この金融機関を「銀行マスタから選択」で呼び出せます。
+        </p>
+        <div className="flex gap-2">
+          <button onClick={onSkip} className="flex-1 py-2 rounded-xl text-sm font-medium"
+            style={{ background: '#F3F4F6', color: '#6B7280' }}>
+            今は追加しない
+          </button>
+          <button onClick={onConfirm} className="flex-1 py-2 rounded-xl text-sm font-semibold"
+            style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', color: '#fff' }}>
+            追加する
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function AreaMasterPage() {
   const { entries, addEntry, updateEntry, deleteEntry } = useAreaMaster();
+  const { banks, addBank } = useBanks();
   const [modal, setModal] = useState<'add' | AreaMasterEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AreaMasterEntry | null>(null);
   const [search, setSearch] = useState('');
   const [addressSearch, setAddressSearch] = useState('');
   const [filterType, setFilterType] = useState<InstitutionType | 'all'>('all');
+  const [addToBankName, setAddToBankName] = useState<string | null>(null);
 
   const handleSave = (e: AreaMasterEntry) => {
     if (modal === 'add') {
       const { id: _id, ...data } = e;
       addEntry(data);
+      // 手入力名が銀行マスタに未登録の場合、追加を提案
+      if (!data.bankId && data.institutionName.trim()) {
+        const matched = banks.find(b => b.name === data.institutionName.trim());
+        if (!matched) setAddToBankName(data.institutionName.trim());
+      }
     } else {
       const { id, ...data } = e;
       updateEntry(id, data);
     }
     setModal(null);
+  };
+
+  const handleAddToBank = (name: string) => {
+    addBank({
+      id: `bank_${Date.now()}`,
+      name,
+      productName: '',
+      productType: 'variable',
+      rate: 0,
+      danshin: '',
+      feeYen: 0,
+      guarantee: '',
+      areas: [],
+      minIncome: 0,
+      minYearsEmployed: 0,
+      allowedEmployments: [],
+      maxLoanRatio: 7,
+      features: [],
+      jobChangeMonths: null,
+      selfEmployedYears: null,
+      corporateRepOk: false,
+      contractOk: false,
+      dispatchOk: false,
+      foreignNationalOk: false,
+      permanentResidencyRequired: false,
+      matLeaveReturnOk: false,
+      redBalanceSheetOk: false,
+      debtConsolidationOk: false,
+      incomeAggregationOk: false,
+      pairLoanOk: false,
+      carLoanImpact: 'なし',
+      cardLoanImpact: 'なし',
+      danshinTypes: [],
+      zehDiscount: null,
+      longTermQualityDiscount: null,
+      staffMemo: '',
+    });
+    setAddToBankName(null);
   };
 
   const handleDelete = () => {
@@ -456,6 +626,23 @@ export default function AreaMasterPage() {
           const tc = TYPE_COLORS[entry.institutionType];
           return (
             <div key={entry.id} className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+              {/* 銀行マスタ連携バッジ */}
+              {(() => {
+                if (!entry.bankId) return null;
+                const linked = banks.find(b => b.id === entry.bankId);
+                if (linked) return (
+                  <div className="mb-2 flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg w-fit"
+                    style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
+                    <Link2 size={11} /><span>銀行マスタ連携: {linked.name}</span>
+                  </div>
+                );
+                return (
+                  <div className="mb-2 flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg w-fit"
+                    style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#B45309' }}>
+                    <Link2Off size={11} /><span>銀行マスタ未登録（削除された可能性があります）</span>
+                  </div>
+                );
+              })()}
               <div className="flex items-start gap-3">
                 <span className="text-xs px-2 py-1 rounded-full font-semibold shrink-0 mt-0.5"
                   style={{ background: tc.bg, color: tc.color }}>
@@ -535,6 +722,7 @@ export default function AreaMasterPage() {
       {modal !== null && (
         <EntryModal
           entry={modal === 'add' ? null : modal}
+          banks={banks}
           onSave={handleSave}
           onClose={() => setModal(null)}
         />
@@ -544,6 +732,13 @@ export default function AreaMasterPage() {
           name={`${deleteTarget.institutionName} ${deleteTarget.branchName}`}
           onConfirm={handleDelete}
           onClose={() => setDeleteTarget(null)}
+        />
+      )}
+      {addToBankName && (
+        <AddToBankPrompt
+          name={addToBankName}
+          onConfirm={() => handleAddToBank(addToBankName)}
+          onSkip={() => setAddToBankName(null)}
         />
       )}
     </div>

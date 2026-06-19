@@ -8,11 +8,12 @@ import {
   MapPin, Phone, Mail, User,
 } from "lucide-react";
 import { useBanks } from "@/hooks/useBanks";
+import { useAreaMaster } from "@/hooks/useAreaMaster";
 import { useLoanScheduleTemplates } from "@/hooks/useLoanScheduleTemplates";
 import { PrefCityTagInput } from "@/components/PrefCityTagInput";
 import { BANKS } from "@/lib/banks";
 import { FIXED_PERIOD_LABELS, SUPPORT_LEVEL_LABELS, SUPPORT_LEVEL_STYLES, REPAYMENT_TIMING_LABELS, LOAN_DATE_LABELS } from "@/types";
-import type { BankMaster, BankContact, EmploymentType, LoanImpactLevel, ProductType, FixedPeriodType, SupportLevel, RepaymentStartTiming, LoanDateKey, TemplateTask } from "@/types";
+import type { BankMaster, BankContact, EmploymentType, LoanImpactLevel, ProductType, FixedPeriodType, SupportLevel, RepaymentStartTiming, LoanDateKey, TemplateTask, AreaMasterEntry } from "@/types";
 
 // ── Tag Input ────────────────────────────────────────────────────────────────
 
@@ -85,9 +86,11 @@ function emptyBank(): Omit<BankMaster, 'id'> {
     areas: ['全国'], minIncome: 200, minYearsEmployed: 1,
     allowedEmployments: ['正社員', '公務員'],
     maxLoanRatio: 7, features: [''],
+    screeningRate: undefined, repaymentRatioMax: undefined,
     jobChangeMonths: 6, selfEmployedYears: 2,
     corporateRepOk: true, contractOk: false, dispatchOk: false,
     foreignNationalOk: true, permanentResidencyRequired: false,
+    matLeaveReturnOk: false, redBalanceSheetOk: false, debtConsolidationOk: false,
     incomeAggregationOk: true, pairLoanOk: true,
     carLoanImpact: '中', cardLoanImpact: '中',
     danshinTypes: ['一般団信（無料）'],
@@ -141,8 +144,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 // ── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ b, onEdit, onDelete }: {
+function DetailPanel({ b, areaEntries, onEdit, onDelete }: {
   b: BankMaster;
+  areaEntries: AreaMasterEntry[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -209,12 +213,12 @@ function DetailPanel({ b, onEdit, onDelete }: {
           </div>
         </div>
 
-        {/* 既存ローン影響 + 省エネ優遇 */}
+        {/* 費用・優遇 */}
         <div className="rounded-xl p-4" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-          <SecTitle icon={<CreditCard size={13} />} label="既存ローン影響度" />
-          <Row label="車ローン"><ImpactBadge level={b.carLoanImpact} /></Row>
-          <Row label="カードローン"><ImpactBadge level={b.cardLoanImpact} /></Row>
-          <div className="mt-4">
+          <SecTitle icon={<CreditCard size={13} />} label="費用・優遇" />
+          <Row label="事務手数料">{b.feeYen > 0 ? `${b.feeYen.toLocaleString()}円` : '無料'}</Row>
+          <Row label="保証料">{b.guarantee || '—'}</Row>
+          <div className="mt-3">
             <SecTitle icon={<Zap size={13} />} label="省エネ・性能優遇" />
             <Row label="ZEH優遇">
               {b.zehDiscount ? <span style={{ color: '#7C3AED', fontWeight: 600 }}>-{b.zehDiscount.toFixed(3)}%</span> : <span style={{ color: '#9CA3AF' }}>なし</span>}
@@ -223,8 +227,13 @@ function DetailPanel({ b, onEdit, onDelete }: {
               {b.longTermQualityDiscount ? <span style={{ color: '#7C3AED', fontWeight: 600 }}>-{b.longTermQualityDiscount.toFixed(3)}%</span> : <span style={{ color: '#9CA3AF' }}>なし</span>}
             </Row>
           </div>
+          <div className="mt-3">
+            <SecTitle icon={<AlertTriangle size={13} />} label="既存ローン影響度" />
+            <Row label="車ローン"><ImpactBadge level={b.carLoanImpact} /></Row>
+            <Row label="カードローン"><ImpactBadge level={b.cardLoanImpact} /></Row>
+          </div>
           {(b.lastConfirmedDate || b.confirmedBy) && (
-            <div className="mt-4">
+            <div className="mt-3">
               <SecTitle icon={<CheckCircle size={13} />} label="最終確認" />
               {b.lastConfirmedDate && <Row label="確認日">{b.lastConfirmedDate}</Row>}
               {b.confirmedBy && <Row label="確認者">{b.confirmedBy}</Row>}
@@ -288,6 +297,67 @@ function DetailPanel({ b, onEdit, onDelete }: {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* 融資エリア登録状況 */}
+        {areaEntries.length > 0 && (
+          <div className="rounded-xl p-4" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5 pb-1.5" style={{ borderBottom: '1px solid #F3F4F6', width: '100%' }}>
+                <MapPin size={13} style={{ color: '#6B7280' }} />
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#374151' }}>融資エリア登録状況</span>
+                <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#DBEAFE', color: '#1D4ED8' }}>
+                  {areaEntries.length}件
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2 mb-3">
+              {areaEntries.map(e => (
+                <div key={e.id} className="rounded-lg p-2.5" style={{ background: '#F8FAFC', border: '1px solid #F1F5F9' }}>
+                  <div className="text-xs font-semibold mb-1" style={{ color: '#374151' }}>
+                    {e.branchName || e.institutionName}
+                    {e.contactName && <span className="ml-2 font-normal" style={{ color: '#6B7280' }}>担当：{e.contactName}</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {e.targetAreas.map(a => (
+                      <span key={a} className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#DCFCE7', color: '#15803D' }}>{a}</span>
+                    ))}
+                    {e.excludedAreas.map(a => (
+                      <span key={a} className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#FEE2E2', color: '#DC2626' }}>除外：{a}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <a href="/area-master" className="inline-flex items-center gap-1 text-xs font-semibold transition-colors"
+              style={{ color: '#2563EB' }}>
+              融資エリアを編集 →
+            </a>
+          </div>
+        )}
+        {areaEntries.length === 0 && (
+          <div className="rounded-xl p-4" style={{ background: '#F9FAFB', border: '1px dashed #E5E7EB' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <MapPin size={13} style={{ color: '#9CA3AF' }} />
+              <span className="text-xs font-bold" style={{ color: '#9CA3AF' }}>融資エリア未登録</span>
+            </div>
+            <a href="/area-master" className="inline-flex items-center gap-1 text-xs font-semibold"
+              style={{ color: '#2563EB' }}>
+              融資エリアを登録する →
+            </a>
+          </div>
+        )}
+
+        {/* つなぎ融資・分割実行 */}
+        {(b.bridgeLoanSupport || b.splitExecutionSupport) && (
+          <div className="rounded-xl p-4" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+            <SecTitle icon={<Home size={13} />} label="つなぎ融資・分割実行" />
+            {b.bridgeLoanSupport && <Row label="つなぎ融資"><span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={SUPPORT_LEVEL_STYLES[b.bridgeLoanSupport]}>{SUPPORT_LEVEL_LABELS[b.bridgeLoanSupport]}</span></Row>}
+            {b.splitExecutionSupport && <Row label="分割実行"><span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={SUPPORT_LEVEL_STYLES[b.splitExecutionSupport]}>{SUPPORT_LEVEL_LABELS[b.splitExecutionSupport]}</span></Row>}
+            {b.landFirstLoanSupport && <Row label="土地先行融資"><span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={SUPPORT_LEVEL_STYLES[b.landFirstLoanSupport]}>{SUPPORT_LEVEL_LABELS[b.landFirstLoanSupport]}</span></Row>}
+            {b.buildingInterimSupport && <Row label="建物中間金"><span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={SUPPORT_LEVEL_STYLES[b.buildingInterimSupport]}>{SUPPORT_LEVEL_LABELS[b.buildingInterimSupport]}</span></Row>}
+            {b.repaymentStartTiming && <Row label="返済開始">{REPAYMENT_TIMING_LABELS[b.repaymentStartTiming]}</Row>}
           </div>
         )}
 
@@ -563,6 +633,8 @@ function BankModal({ bank, onSave, onClose }: {
       allowedEmployments: bank.allowedEmployments ?? ['正社員', '公務員'],
       maxLoanRatio: bank.maxLoanRatio ?? 7,
       features: bank.features ?? [''],
+      screeningRate: bank.screeningRate,
+      repaymentRatioMax: bank.repaymentRatioMax,
       jobChangeMonths: bank.jobChangeMonths ?? 6,
       selfEmployedYears: bank.selfEmployedYears ?? 2,
       corporateRepOk: bank.corporateRepOk ?? true,
@@ -570,6 +642,9 @@ function BankModal({ bank, onSave, onClose }: {
       dispatchOk: bank.dispatchOk ?? false,
       foreignNationalOk: bank.foreignNationalOk ?? true,
       permanentResidencyRequired: bank.permanentResidencyRequired ?? false,
+      matLeaveReturnOk: bank.matLeaveReturnOk ?? false,
+      redBalanceSheetOk: bank.redBalanceSheetOk ?? false,
+      debtConsolidationOk: bank.debtConsolidationOk ?? false,
       incomeAggregationOk: bank.incomeAggregationOk ?? true,
       pairLoanOk: bank.pairLoanOk ?? true,
       carLoanImpact: bank.carLoanImpact ?? '中',
@@ -735,6 +810,18 @@ function BankModal({ bank, onSave, onClose }: {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className={labelCls} style={labelStyle}>審査金利（%）</label>
+                  <input type="number" step="0.001" min="0" className={`${inputCls} ${inputFocus}`} style={inputStyle}
+                    value={form.screeningRate ?? ''} onChange={e => set('screeningRate', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="例：3.500" />
+                </div>
+                <div>
+                  <label className={labelCls} style={labelStyle}>返済比率上限（%）</label>
+                  <input type="number" step="0.5" min="0" max="100" className={`${inputCls} ${inputFocus}`} style={inputStyle}
+                    value={form.repaymentRatioMax ?? ''} onChange={e => set('repaymentRatioMax', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="例：35" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className={labelCls} style={labelStyle}>最低年収（万円）</label>
                   <input type="number" min="0" className={`${inputCls} ${inputFocus}`} style={inputStyle} value={form.minIncome} onChange={e => set('minIncome', Number(e.target.value))} />
                 </div>
@@ -855,6 +942,9 @@ function BankModal({ bank, onSave, onClose }: {
                   ['外国籍', 'foreignNationalOk'],
                   ['収入合算', 'incomeAggregationOk'],
                   ['ペアローン', 'pairLoanOk'],
+                  ['育休復帰予定', 'matLeaveReturnOk'],
+                  ['赤字決算', 'redBalanceSheetOk'],
+                  ['借入おまとめ', 'debtConsolidationOk'],
                 ] as [string, keyof BankMaster][]).map(([label, key]) => (
                   <div key={key} className="flex items-center justify-between p-3 rounded-xl" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                     <span className="text-xs font-medium" style={{ color: '#374151' }}>{label}</span>
@@ -1281,6 +1371,7 @@ function DeleteConfirm({ bankName, onConfirm, onClose }: {
 
 export default function BanksPage() {
   const { banks, loaded, addBank, updateBank, deleteBank } = useBanks();
+  const { entries: areaEntries, updateEntry: updateAreaEntry } = useAreaMaster();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [modal, setModal] = useState<'add' | BankMaster | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BankMaster | null>(null);
@@ -1299,9 +1390,15 @@ export default function BanksPage() {
     if (modal === 'add') {
       addBank(b);
     } else {
+      const oldBank = modal as BankMaster;
       updateBank(b.id, b);
-      // Update expanded if editing the currently expanded bank
-      if (expanded === (modal as BankMaster).id) setExpanded(b.id);
+      // 銀行名が変わった場合、融資エリアマスタの同名エントリを自動同期
+      if (oldBank.name !== b.name) {
+        areaEntries
+          .filter(e => e.bankId === b.id)
+          .forEach(e => updateAreaEntry(e.id, { ...e, institutionName: b.name }));
+      }
+      if (expanded === oldBank.id) setExpanded(b.id);
     }
     setModal(null);
   };
@@ -1385,23 +1482,25 @@ export default function BanksPage() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mb-4 text-xs" style={{ color: '#6B7280' }}>
-        <span>車/カードローン影響：</span>
-        {(['なし', '低', '中', '高'] as LoanImpactLevel[]).map(l => (
-          <span key={l}><ImpactBadge level={l} /></span>
-        ))}
-        <span className="ml-3">▼ 行をクリックで詳細展開</span>
+        <span>▼ 行をクリックで詳細展開</span>
       </div>
 
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         {/* Desktop */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm min-w-[960px]">
+          <table className="w-full text-sm min-w-[820px]">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', background: '#F9FAFB' }}>
-                {['銀行名 / 商品名', '金利', ...(productTab === 'fixed' ? ['固定タイプ'] : []), '事務手数料', '車', 'カード', '合算', 'ペア', 'ZEH', '長期優良', '操作', ''].map(h => (
-                  <th key={h} className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
+              <tr style={{ borderBottom: '2px solid var(--border)', background: '#F9FAFB' }}>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)', minWidth: 200 }}>銀行名 / 商品名</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>適用金利</th>
+                {productTab === 'fixed' && <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>固定タイプ</th>}
+                <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>審査金利</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>返済比率上限</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>個人事業主</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>ペアローン</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>操作</th>
+                <th className="px-2 py-3" style={{ width: 28 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -1414,12 +1513,12 @@ export default function BanksPage() {
                     onMouseLeave={e => (e.currentTarget.style.background = '')}
                     onClick={() => setExpanded(expanded === b.id ? null : b.id)}
                   >
-                    <td className="px-3 py-3">
-                      <div className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>{b.name}</div>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{b.name}</div>
                       <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{b.productName}</div>
                     </td>
                     <td className="px-3 py-3">
-                      <span className="font-bold text-sm" style={{ color: productTab === 'variable' ? '#3B82F6' : '#7C3AED' }}>{b.rate.toFixed(3)}%</span>
+                      <span className="font-bold text-base" style={{ color: productTab === 'variable' ? '#3B82F6' : '#7C3AED' }}>{b.rate.toFixed(3)}%</span>
                     </td>
                     {productTab === 'fixed' && (
                       <td className="px-3 py-3">
@@ -1428,19 +1527,16 @@ export default function BanksPage() {
                         </span>
                       </td>
                     )}
-                    <td className="px-3 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {b.feeYen > 0 ? `${b.feeYen.toLocaleString()}円` : '無料'}
+                    <td className="px-3 py-3 text-xs" style={{ color: b.screeningRate ? '#374151' : '#9CA3AF' }}>
+                      {b.screeningRate ? <><span className="font-semibold" style={{ color: '#374151' }}>{b.screeningRate.toFixed(3)}</span><span style={{ color: '#6B7280' }}>%</span></> : <span style={{ color: '#9CA3AF' }}>—</span>}
                     </td>
-                    <td className="px-3 py-3"><ImpactBadge level={b.carLoanImpact} /></td>
-                    <td className="px-3 py-3"><ImpactBadge level={b.cardLoanImpact} /></td>
-                    <td className="px-3 py-3"><YesNo val={b.incomeAggregationOk} /></td>
+                    <td className="px-3 py-3 text-xs">
+                      {b.repaymentRatioMax ? <><span className="font-semibold" style={{ color: '#374151' }}>{b.repaymentRatioMax}</span><span style={{ color: '#6B7280' }}>%</span></> : <span style={{ color: '#9CA3AF' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-3">
+                      <YesNo val={b.selfEmployedYears !== null} />
+                    </td>
                     <td className="px-3 py-3"><YesNo val={b.pairLoanOk} /></td>
-                    <td className="px-3 py-3 text-xs" style={{ color: b.zehDiscount ? '#7C3AED' : '#9CA3AF' }}>
-                      {b.zehDiscount ? `-${b.zehDiscount.toFixed(3)}%` : 'なし'}
-                    </td>
-                    <td className="px-3 py-3 text-xs" style={{ color: b.longTermQualityDiscount ? '#7C3AED' : '#9CA3AF' }}>
-                      {b.longTermQualityDiscount ? `-${b.longTermQualityDiscount.toFixed(3)}%` : 'なし'}
-                    </td>
                     <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
@@ -1465,7 +1561,7 @@ export default function BanksPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-2 py-3">
                       <ChevronDown
                         size={14}
                         className={`transition-transform duration-200 ${expanded === b.id ? 'rotate-180' : ''}`}
@@ -1475,8 +1571,8 @@ export default function BanksPage() {
                   </tr>
                   {expanded === b.id && (
                     <tr key={`${b.id}-detail`} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                      <td colSpan={productTab === 'fixed' ? 12 : 11} className="p-0">
-                        <DetailPanel b={b} onEdit={() => setModal(b)} onDelete={() => setDeleteTarget(b)} />
+                      <td colSpan={productTab === 'fixed' ? 9 : 8} className="p-0">
+                        <DetailPanel b={b} areaEntries={areaEntries.filter(e => e.bankId === b.id)} onEdit={() => setModal(b)} onDelete={() => setDeleteTarget(b)} />
                       </td>
                     </tr>
                   )}
@@ -1484,7 +1580,7 @@ export default function BanksPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={productTab === 'fixed' ? 12 : 11} className="py-16 text-center text-sm" style={{ color: '#9CA3AF' }}>
+                  <td colSpan={productTab === 'fixed' ? 9 : 8} className="py-16 text-center text-sm" style={{ color: '#9CA3AF' }}>
                     {search ? `「${search}」に一致する銀行は見つかりませんでした` : '銀行が登録されていません'}
                   </td>
                 </tr>
@@ -1512,19 +1608,30 @@ export default function BanksPage() {
                     style={{ color: 'var(--text-muted)' }}
                   />
                 </div>
-                <div className="flex gap-4 mt-2">
+                <div className="flex gap-4 mt-2 flex-wrap">
                   <div>
                     <div className="text-xs" style={{ color: '#9CA3AF' }}>{productTab === 'variable' ? '変動金利' : (b.fixedPeriod ? FIXED_PERIOD_LABELS[b.fixedPeriod as FixedPeriodType] : '固定金利')}</div>
                     <div className="font-bold text-sm" style={{ color: productTab === 'variable' ? '#3B82F6' : '#7C3AED' }}>{b.rate.toFixed(3)}%</div>
                   </div>
+                  {b.screeningRate && (
+                    <div>
+                      <div className="text-xs" style={{ color: '#9CA3AF' }}>審査金利</div>
+                      <div className="font-semibold text-sm" style={{ color: '#374151' }}>{b.screeningRate.toFixed(3)}%</div>
+                    </div>
+                  )}
+                  {b.repaymentRatioMax && (
+                    <div>
+                      <div className="text-xs" style={{ color: '#9CA3AF' }}>返済比率</div>
+                      <div className="font-semibold text-sm" style={{ color: '#374151' }}>{b.repaymentRatioMax}%</div>
+                    </div>
+                  )}
                   <div className="flex items-end gap-1.5 pb-0.5">
-                    <ImpactBadge level={b.carLoanImpact} />
-                    <ImpactBadge level={b.cardLoanImpact} />
+                    <YesNo val={b.pairLoanOk} />
                   </div>
                 </div>
               </button>
               {expanded === b.id && (
-                <DetailPanel b={b} onEdit={() => setModal(b)} onDelete={() => setDeleteTarget(b)} />
+                <DetailPanel b={b} areaEntries={areaEntries.filter(e => e.bankId === b.id)} onEdit={() => setModal(b)} onDelete={() => setDeleteTarget(b)} />
               )}
             </div>
           ))}
